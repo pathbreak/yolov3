@@ -107,7 +107,7 @@ def check_dataset(data, autodownload=True):
     train, val, test, s = (data.get(x) for x in ('train', 'val', 'test', 'download'))
 
     # val = [Path(x).resolve() for x in (val if isinstance(val, list) else [val])]  # val path
-    paths = [Path(x).resolve() for x in ('train', 'val', 'test')]  # check paths
+    paths = [Path(x).resolve() for x in (train, val, test)]  # check paths
     if not all(x.exists() for x in paths):
         print('\nWARNING: Dataset not found, nonexistent paths: %s' % [str(x) for x in paths if not x.exists()])
         if s and autodownload:  # download script
