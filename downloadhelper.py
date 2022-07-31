@@ -160,24 +160,65 @@ def download(url, dir='.', unzip=True, delete=True, curl=True, threads=1):
             os.system(f"curl -L '{url}' -o '{f}' --retry 9 -C -")  # curl download, retry and resume on fail
             
         if unzip and f.suffix in ('.zip', '.gz'):
-            print(f'Unzipping {f}...')
+            
             if f.suffix == '.zip':
+                print(f'Unzipping {f}...')
                 ZipFile(f).extractall(path=dir)  # unzip
+                
             elif f.suffix == '.gz':
-                os.system(f'tar xfz {f} --directory {f.parent}')  # unzip
+                # Check if the archive's already been unzipped using a number of heuristics:
+                # 1. Number of files should match. But this is a problem to implement generically
+                #   because we don't know the directory names inside the archive to compare.
+                #   For future ref, this can be implemented as follows:
+                #      Get number of files (not dirs) in archive: os.popen(f'tar tf {f} -C {f.parent} | grep -e "[^/]$" | wc -l').read()
+                #      List only the dirs inside the TAR : tar tvf patch0.tar.gz | grep -e "^[d]"
+                #      For each such directory inside the TAR, check if it exists on the filesystem
+                #           and get # of files in that directory.
+                #
+                # 2. If 'tar diff' with unproblematic diffs removed starts producing output immediately, 
+                #    something's wrong.
+                #
+                # 3. If all the above are fine, do a full 'tar diff' while filtering out unproblematic diffs.
+                #    If there's no output at all, it's fine.
+                
+                do_unzip = False
+
+                output = os.popen(f"tar df {f} -C {f.parent} | head -n100 | awk '!/Mode/ && !/Uid/ && !/Gid/ && !/time/'").read()
+                if len(output) > 0:
+                    # tar diff's immediately started showing errors, possibly "cannot find file" errors. 
+                    # To be on the safe size, unzip the archive again.
+                    print('tar diff found immediate differences. Will unzip again.')
+                    do_unzip = True
+                else:
+                    # Now try a full df just to be sure.
+                    output = os.popen(f"tar df {f} -C {f.parent} | awk '!/Mode/ && !/Uid/ && !/Gid/ && !/time/'").read()
+                    if len(output) > 0:
+                        # Full diff shows some critical differences. Unzip the archive.
+                        print('full tar diff found differences. Will unzip again.')
+                        do_unzip = True
+
+                if do_unzip:
+                    print(f'Unzipping {f}...')
+                    os.system(f'tar xfz {f} -C {f.parent}')  # unzip
+                else:
+                    print('Archive already unzipped.')
+
             if delete:
                 f.unlink()  # remove zip
 
     dir = Path(dir)
     dir.mkdir(parents=True, exist_ok=True)  # make directory
-    if threads > 1:
-        pool = ThreadPool(threads)
-        pool.imap(lambda x: download_one(*x), zip(url, repeat(dir)))  # multi-threaded
-        pool.close()
-        pool.join()
-    else:
-        for u in [url] if isinstance(url, (str, Path)) else url:
-            download_one(u, dir)
+    
+    # Disable multi-thread downloads because they tend to cause failures
+    # in remote SFTP mounts.
+    #if threads > 1:
+    #    pool = ThreadPool(threads)
+    #    pool.imap(lambda x: download_one(*x), zip(url, repeat(dir)))  # multi-threaded
+    #    pool.close()
+    #    pool.join()
+    #else:
+    for u in [url] if isinstance(url, (str, Path)) else url:
+        download_one(u, dir)
 
 
 # Required by download script inside data YAML files.
