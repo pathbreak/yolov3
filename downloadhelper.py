@@ -105,33 +105,33 @@ def check_dataset(data, autodownload=True):
     if 'names' not in data:
         data['names'] = [f'class{i}' for i in range(data['nc'])]  # assign class names if missing
     train, val, test, s = (data.get(x) for x in ('train', 'val', 'test', 'download'))
-    if val:
-        val = [Path(x).resolve() for x in (val if isinstance(val, list) else [val])]  # val path
-        if not all(x.exists() for x in val):
-            print('\nWARNING: Dataset not found, nonexistent paths: %s' % [str(x) for x in val if not x.exists()])
-            if s and autodownload:  # download script
-                root = path.parent if 'path' in data else '..'  # unzip directory i.e. '../'
-                if s.startswith('http') and s.endswith('.zip'):  # URL
-                    f = Path(s).name  # filename
-                    print(f'Downloading {s} to {f}...')
+
+    paths = [Path(x).resolve() for x in ('train', 'val', 'test')]  # check paths
+    if not all(x.exists() for x in paths):
+        print('\nWARNING: Dataset not found, nonexistent paths: %s' % [str(x) for x in val if not x.exists()])
+        if s and autodownload:  # download script
+            root = path.parent if 'path' in data else '..'  # unzip directory i.e. '../'
+            if s.startswith('http') and s.endswith('.zip'):  # URL
+                f = Path(s).name  # filename
+                print(f'Downloading {s} to {f}...')
+                
+                # Remove dependency on Torch:
+                #   torch.hub.download_url_to_file(s, f)
+                #   Path(root).mkdir(parents=True, exist_ok=True)  # create root
+                #   ZipFile(f).extractall(path=root)  # unzip
+                #   Path(f).unlink()  # remove zip
+                
+                download(s, dir=root, unzip=True, delete=True, threads=1)
                     
-                    # Remove dependency on Torch:
-                    #   torch.hub.download_url_to_file(s, f)
-                    #   Path(root).mkdir(parents=True, exist_ok=True)  # create root
-                    #   ZipFile(f).extractall(path=root)  # unzip
-                    #   Path(f).unlink()  # remove zip
-                    
-                    download(s, dir=root, unzip=True, delete=True, threads=1)
-                        
-                    r = None  # success
-                elif s.startswith('bash '):  # bash script
-                    print(f'Running {s} ...')
-                    r = os.system(s)
-                else:  # python script
-                    r = exec(s, {'yaml': data})  # return None
-                print(f"Dataset autodownload {f'success, saved to {root}' if r in (0, None) else 'failure'}\n")
-            else:
-                raise Exception('Dataset not found.')
+                r = None  # success
+            elif s.startswith('bash '):  # bash script
+                print(f'Running {s} ...')
+                r = os.system(s)
+            else:  # python script
+                r = exec(s, {'yaml': data})  # return None
+            print(f"Dataset autodownload {f'success, saved to {root}' if r in (0, None) else 'failure'}\n")
+        else:
+            raise Exception('Dataset not found.')
 
     return data  # dictionary
 
@@ -181,6 +181,7 @@ def download(url, dir='.', unzip=True, delete=True, curl=True, threads=1):
                 # 3. If all the above are fine, do a full 'tar diff' while filtering out unproblematic diffs.
                 #    If there's no output at all, it's fine.
                 
+                print(f'Checking if {f} should be unzipped...')
                 do_unzip = False
 
                 output = os.popen(f"tar df {f} -C {f.parent} | head -n100 | awk '!/Mode/ && !/Uid/ && !/Gid/ && !/time/'").read()
