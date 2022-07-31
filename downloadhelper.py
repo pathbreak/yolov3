@@ -106,9 +106,10 @@ def check_dataset(data, autodownload=True):
         data['names'] = [f'class{i}' for i in range(data['nc'])]  # assign class names if missing
     train, val, test, s = (data.get(x) for x in ('train', 'val', 'test', 'download'))
 
+    # val = [Path(x).resolve() for x in (val if isinstance(val, list) else [val])]  # val path
     paths = [Path(x).resolve() for x in ('train', 'val', 'test')]  # check paths
     if not all(x.exists() for x in paths):
-        print('\nWARNING: Dataset not found, nonexistent paths: %s' % [str(x) for x in val if not x.exists()])
+        print('\nWARNING: Dataset not found, nonexistent paths: %s' % [str(x) for x in paths if not x.exists()])
         if s and autodownload:  # download script
             root = path.parent if 'path' in data else '..'  # unzip directory i.e. '../'
             if s.startswith('http') and s.endswith('.zip'):  # URL
