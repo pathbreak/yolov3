@@ -257,12 +257,14 @@ def download_objects365():
                 width, height = im["width"], im["height"]
                 path = Path(im["file_name"])  # image filename
                 try:
-                    with open(labels / path.with_suffix('.txt').name, 'a') as f:
+                    label_file = labels / path.with_suffix('.txt').name
+                    with open(label_file, 'a') as f:
                         annIds = coco.getAnnIds(imgIds=im["id"], catIds=catIds, iscrowd=None)
                         for a in coco.loadAnns(annIds):
                             x, y, w, h = a['bbox']  # bounding box in xywh (xy top-left corner)
                             xyxy = np.array([x, y, x + w, y + h])[None]  # pixels(1,4)
                             x, y, w, h = xyxy2xywhn(xyxy, w=width, h=height, clip=True)[0]  # normalized and clipped
+                            print(f'Writing {label_file}')
                             f.write(f"{cid} {x:.5f} {y:.5f} {w:.5f} {h:.5f}\n")
                 except Exception as e:
                     print(e)
