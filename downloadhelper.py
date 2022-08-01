@@ -56,7 +56,12 @@ def main():
     setup_import_stubs()
 
     datafile = sys.argv[1]
-    check_dataset(datafile)
+    if datafile.endswith('yaml'):
+        check_dataset(datafile)
+        
+    else:
+        if datafile == 'objects365':
+            download_objects365()
 
 
 def setup_import_stubs():
@@ -185,6 +190,8 @@ def download(url, dir='.', unzip=True, delete=True, curl=True, threads=1):
                 print(f'Checking if {f} should be unzipped...')
                 do_unzip = False
 
+                # TODO There's a mistake here : read() only reads stdout but tar errors are output to stderr. Use subprocess.Popen()
+                # instead of os.popen(). Use shlex.split(cmdline) to split the cmdline into args compatible with Popen().
                 output = os.popen(f"tar df {f} -C {f.parent} | head -n100 | awk '!/Mode/ && !/Uid/ && !/Gid/ && !/time/'").read()
                 if len(output) > 0:
                     # tar diff's immediately started showing errors, possibly "cannot find file" errors. 
@@ -222,6 +229,44 @@ def download(url, dir='.', unzip=True, delete=True, curl=True, threads=1):
     for u in [url] if isinstance(url, (str, Path)) else url:
         download_one(u, dir)
 
+
+
+def download_objects365():
+    # Code copied from data/objects365.yaml
+    
+    from pycocotools.coco import COCO
+    from tqdm import tqdm
+    
+    # Make Directories
+    rootdir = Path(sys.argv[2])  # dataset root dir
+    
+    for p in 'images', 'labels':
+        (rootdir / p).mkdir(parents=True, exist_ok=True)
+        for q in 'train', 'val':
+            (rootdir / p / q).mkdir(parents=True, exist_ok=True)
+    
+    for split in ['train', 'val']:
+        images, labels = rootdir / 'images' / split, rootdir / 'labels' / split
+    
+        coco = COCO(rootdir / f'zhiyuan_objv2_{split}.json')
+        names = [x["name"] for x in coco.loadCats(coco.getCatIds())]
+        for cid, cat in enumerate(names):
+            catIds = coco.getCatIds(catNms=[cat])
+            imgIds = coco.getImgIds(catIds=catIds)
+            for im in tqdm(coco.loadImgs(imgIds), desc=f'Class {cid + 1}/{len(names)} {cat}'):
+                width, height = im["width"], im["height"]
+                path = Path(im["file_name"])  # image filename
+                try:
+                    with open(labels / path.with_suffix('.txt').name, 'a') as f:
+                        annIds = coco.getAnnIds(imgIds=im["id"], catIds=catIds, iscrowd=None)
+                        for a in coco.loadAnns(annIds):
+                            x, y, w, h = a['bbox']  # bounding box in xywh (xy top-left corner)
+                            xyxy = np.array([x, y, x + w, y + h])[None]  # pixels(1,4)
+                            x, y, w, h = xyxy2xywhn(xyxy, w=width, h=height, clip=True)[0]  # normalized and clipped
+                            f.write(f"{cid} {x:.5f} {y:.5f} {w:.5f} {h:.5f}\n")
+                except Exception as e:
+                    print(e)
+    
 
 # Required by download script inside data YAML files.
 def xyxy2xywhn(x, w=640, h=640, clip=False, eps=0.0):
