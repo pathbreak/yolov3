@@ -245,6 +245,14 @@ def download_objects365():
         for q in 'train', 'val':
             (rootdir / p / q).mkdir(parents=True, exist_ok=True)
     
+    # WARNING: This COCO step requires 25GiB RAM to load the JSON and
+    # process it. Run it in Colab with a custom GCE highmem VM.
+    
+    # WARNING 2: This process is slooooow! For each of the 365 classes,
+    # it'll iterate through anywhere from 400,000 to 1.38 million JSON entries depending
+    # on the classes each image has.
+    # Best to keep the JSON on local drives rather than SFTP/remote drives.
+    # One it's all completed, transfer just the output label files to remote drive.
     for split in ['train', 'val']:
         images, labels = rootdir / 'images' / split, rootdir / 'labels' / split
     
@@ -264,7 +272,7 @@ def download_objects365():
                             x, y, w, h = a['bbox']  # bounding box in xywh (xy top-left corner)
                             xyxy = np.array([x, y, x + w, y + h])[None]  # pixels(1,4)
                             x, y, w, h = xyxy2xywhn(xyxy, w=width, h=height, clip=True)[0]  # normalized and clipped
-                            print(f'Writing {label_file}')
+                            #print(f'Writing {label_file}')  # Don't log this. It slows the process down.
                             f.write(f"{cid} {x:.5f} {y:.5f} {w:.5f} {h:.5f}\n")
                 except Exception as e:
                     print(e)
